@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+keystore.properties
+firebase/
+composeApp/google-services.json
+*.jks
+.idea/
+.DS_Store
+iosApp/Pods/
+xcuserdata/

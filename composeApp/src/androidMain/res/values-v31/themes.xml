@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- системная заставка Android 12+: тёмный фон и наша трасса крупно (вектор-подобная PNG 1024) -->
+    <style name="Theme.NNRacing" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#07070A</item>
+        <item name="android:statusBarColor">#07070A</item>
+        <item name="android:navigationBarColor">#07070A</item>
+        <item name="android:windowSplashScreenBackground">#07070A</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#07070A</item>
+    </style>
+</resources>
