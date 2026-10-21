@@ -103,7 +103,7 @@ fun AuthScreen(app: AppState) {
                     Txt("NN Racing", size = 24.sp, weight = FontWeight.ExtraBold)
                 }
                 Segmented(listOf("Вход", "Регистрация"), if (register) 1 else 0, { register = it == 1; error = "" })
-                Column { FieldLabel("Логин"); AppField(username, { username = it }, placeholder = "pilot.ivan", imeAction = ImeAction.Next) }
+                Column { FieldLabel("Ник"); AppField(username, { username = it }, placeholder = "pilot.ivan", imeAction = ImeAction.Next) }
                 Column { FieldLabel("Пароль"); AppField(password, { password = it }, placeholder = "••••••", password = true, imeAction = if (register) ImeAction.Next else ImeAction.Go, onAction = { if (!register) submit() }) }
                 if (register) {
                     if (app.inviteRequired) Column { FieldLabel("Код приглашения"); AppField(invite, { invite = it }, placeholder = "Код приглашения") }

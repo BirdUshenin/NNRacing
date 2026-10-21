@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -16,11 +19,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+/** Отступ снизу под нижнюю панель: сама панель (≈76 dp) + системная навигация + запас, чтобы последний элемент можно было прокрутить выше неё. */
+@Composable
+fun bottomBarClearance(extra: Int = 28): androidx.compose.ui.unit.Dp =
+    76.dp + extra.dp + androidx.compose.foundation.layout.WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
 /** Прокручиваемая страница с отступами под статус-бар и нижнюю навигацию. */
 @Composable
-fun Page(modifier: Modifier = Modifier, bottomSpace: Int = 100, content: @Composable ColumnScope.() -> Unit) {
+fun Page(modifier: Modifier = Modifier, bottomSpace: Int = 28, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = bottomSpace.dp),
+        modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = (18 + pageTopExtraDp).dp, bottom = bottomBarClearance(bottomSpace)),
         content = content,
     )
 }

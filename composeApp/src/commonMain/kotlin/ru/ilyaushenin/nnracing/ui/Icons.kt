@@ -37,6 +37,14 @@ object Ic {
     const val Clock = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2"
     const val Eye = "M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
     const val EyeOff = "M2 12s4-7 10-7c2 0 3.7.6 5 1.5M22 12s-4 7-10 7c-2 0-3.7-.6-5-1.5M3 3l18 18M10 10a3 3 0 0 0 4 4"
+    const val Sticker = "M12 3.5a8.5 8.5 0 1 0 0 17c2.5 0 3.7-.4 5.3-1.9l1.8-1.8c1.5-1.6 1.9-2.8 1.9-5.3A8.5 8.5 0 0 0 12 3.5zM20.5 12h-3a3 3 0 0 0-3 3v3M9 10v.5M15 10v.5M8.5 14.5c1.9 1.8 4.1 1.8 5.5 0"
+    const val Poll = "M5.5 4h12a2 2 0 0 1 0 4h-12a2 2 0 0 1 0-4zM5.5 10h7a2 2 0 0 1 0 4h-7a2 2 0 0 1 0-4zM5.5 16h9.5a2 2 0 0 1 0 4h-9.5a2 2 0 0 1 0-4z"
+    const val Compose = "M11 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V13M17 3.8l3.2 3.2L11.5 15.7l-3.9.7.7-3.9z"
+    const val Download = "M12 4v11M7 11l5 5 5-5M5 20h14"
+    const val Ban = "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM6.3 6.3l11.4 11.4"
+    const val Bell = "M6 17V11a6 6 0 0 1 12 0v6l1.6 2.2H4.4zM10 21.5h4"
+    const val Reply = "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 6 6v3"
+    const val Copy = "M9 9h11v11H9zM5 15V4h11"
     const val Lock = "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3"
 }
 

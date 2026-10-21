@@ -51,6 +51,39 @@ private fun squareJpeg(image: UIImage): ByteArray? {
     return data.bytes?.readBytes(data.length.toInt())
 }
 
+/** Делегат выбора фото для чата. */
+private class PhotoDelegate(var onPicked: (PickedPhoto) -> Unit) : NSObject(), UIImagePickerControllerDelegateProtocol, UINavigationControllerDelegateProtocol {
+    override fun imagePickerController(picker: UIImagePickerController, didFinishPickingMediaWithInfo: Map<Any?, *>) {
+        picker.dismissViewControllerAnimated(true, null)
+        val image = didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage ?: return
+        chatPhoto(image)?.let(onPicked)
+    }
+
+    override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
+        picker.dismissViewControllerAnimated(true, null)
+    }
+}
+
+/** Длинная сторона до 1600 px и JPEG; при большом размере качество снижается до 3 МБ. */
+@OptIn(ExperimentalForeignApi::class)
+private fun chatPhoto(image: UIImage): PickedPhoto? {
+    val (w, h) = image.size.useContents { width to height }
+    val k = minOf(1.0, 1600.0 / maxOf(w, h))
+    val tw = w * k
+    val th = h * k
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(tw, th), true, 1.0)
+    image.drawInRect(CGRectMake(0.0, 0.0, tw, th))
+    val result = UIGraphicsGetImageFromCurrentImageContext()
+    UIGraphicsEndImageContext()
+    var bytes = ByteArray(0)
+    for (quality in doubleArrayOf(0.85, 0.72, 0.6, 0.45)) {
+        val data = UIImageJPEGRepresentation(result ?: return null, quality) ?: return null
+        bytes = data.bytes?.readBytes(data.length.toInt()) ?: return null
+        if (bytes.size <= 3 * 1024 * 1024) break
+    }
+    return PickedPhoto(bytes, tw.toInt(), th.toInt())
+}
+
 private fun topViewController(): UIViewController? {
     var vc = (UIApplication.sharedApplication.windows.firstOrNull() as? UIWindow)?.rootViewController
     while (vc?.presentedViewController != null) vc = vc.presentedViewController
@@ -71,6 +104,31 @@ actual fun rememberImagePicker(onPicked: (ByteArray) -> Unit): () -> Unit {
 }
 
 @Composable
+actual fun rememberPhotoPicker(onPicked: (PickedPhoto) -> Unit): () -> Unit {
+    val callback = rememberUpdatedState(onPicked)
+    val delegate = remember { PhotoDelegate { callback.value(it) } }
+    return {
+        val picker = UIImagePickerController().apply {
+            sourceType = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypePhotoLibrary
+            this.delegate = delegate
+        }
+        topViewController()?.presentViewController(picker, true, null)
+    }
+}
+
+@Composable
 actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
 
 actual val swipeBackEnabled: Boolean = true
+
+actual val pageTopExtraDp: Int = 0
+
+actual val onboardingEnabled: Boolean = false
+
+@Composable
+actual fun currentAppVersion(): Int = Int.MAX_VALUE   // на iPhone обновления идут через Xcode/TestFlight: окно не показываем
+
+@Composable
+actual fun rememberUrlOpener(): (String) -> Unit = { url ->
+    platform.Foundation.NSURL.URLWithString(url)?.let { platform.UIKit.UIApplication.sharedApplication.openURL(it) }
+}

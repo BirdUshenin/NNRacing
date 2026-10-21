@@ -14,7 +14,9 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ru.ilyaushenin.nnracing.data.Achievement
 import ru.ilyaushenin.nnracing.data.Api
+import ru.ilyaushenin.nnracing.data.UpdateInfo
 import ru.ilyaushenin.nnracing.data.ApiException
 import ru.ilyaushenin.nnracing.data.User
 
@@ -28,6 +30,9 @@ sealed interface Route {
     data class Chat(val id: Int) : Route
 }
 
+/** Версия экрана «что нового»: увеличьте число, чтобы показать его снова у всех после обновления. */
+const val ONBOARDING_VERSION = 1
+
 /** Состояние всего приложения: сессия, стек экранов, бейдж чата, всплывающее сообщение. */
 @Stable
 class AppState(val api: Api, val scope: CoroutineScope) {
@@ -35,6 +40,15 @@ class AppState(val api: Api, val scope: CoroutineScope) {
     var booting by mutableStateOf(true)
     var inviteRequired by mutableStateOf(false)
     var unread by mutableIntStateOf(0)
+    /** Награды, ожидающие показа на экране-поздравлении (по одной, первая — текущая). */
+    val celebrations: SnapshotStateList<Achievement> = mutableStateListOf()
+    /** Показывать «что нового» (один раз на версию). */
+    var showOnboarding by mutableStateOf(false)
+    /** Доступная новая версия приложения (по флагу на сервере); null — обновлений нет. */
+    var update by mutableStateOf<UpdateInfo?>(null)
+    /** Номер версии, которую человек уже отложил кнопкой «Позже» (необязательное обновление). */
+    var updateDismissed by mutableIntStateOf(0)
+    var requests by mutableIntStateOf(0)   // заявки в друзья, ждущие ответа
     var toast by mutableStateOf<String?>(null)
     /** Увеличивается, когда экранам нужно перезагрузить данные. */
     var refreshTick by mutableIntStateOf(0)
@@ -44,21 +58,36 @@ class AppState(val api: Api, val scope: CoroutineScope) {
 
     val current: Route get() = stack.last()
 
+    /** Спрашивает у сервера, не вышла ли новая версия: при запуске и при возвращении в приложение. */
+    suspend fun checkUpdate() {
+        runCatching { api.config() }.onSuccess { update = it.update["android"] }
+    }
+
     suspend fun boot() {
+        // значки с прошлого запуска показываются сразу: свежие подтянутся ниже, уже без ожидания 15 секунд
+        if (api.isSignedIn) api.savedBadges().let { (u, r) -> unread = u; requests = r }
         if (api.isSignedIn) user = runCatching { api.me() }.getOrNull()
+        if (user != null) pollOnce()
+        checkOnboarding()
         if (user == null) inviteRequired = runCatching { api.config().inviteRequired }.getOrDefault(false)
         booting = false
     }
 
+    fun checkOnboarding() { showOnboarding = ru.ilyaushenin.nnracing.ui.onboardingEnabled && user != null && api.onboardingSeen < ONBOARDING_VERSION }
+
+    fun finishOnboarding() { api.onboardingSeen = ONBOARDING_VERSION; showOnboarding = false }
+
     fun signedIn(u: User) {
         cache.clear()
         user = u
+        checkOnboarding()
+        scope.launch { pollOnce() }
         stack.clear(); stack.add(Route.Home)
     }
 
     fun signOut() {
         scope.launch { runCatching { api.unregisterPush() }; api.logout() }
-        user = null; unread = 0; cache.clear()
+        user = null; unread = 0; requests = 0; api.saveBadges(0, 0); cache.clear()
         stack.clear(); stack.add(Route.Home)
     }
 
@@ -73,7 +102,9 @@ class AppState(val api: Api, val scope: CoroutineScope) {
     /** Переход на корневой экран вкладки: стек сбрасывается. */
     fun goTab(route: Route) { stack.clear(); stack.add(route) }
 
-    fun refresh() { refreshTick++ }
+    fun celebrate(list: List<Achievement>) { cache.remove("achievements"); celebrations.addAll(list) }
+
+    fun refresh() { refreshTick++; scope.launch { pollOnce() } }   // после действия сразу обновляем и значки
 
     fun showToast(message: String) {
         toast = message
@@ -89,9 +120,13 @@ class AppState(val api: Api, val scope: CoroutineScope) {
         }
     }
 
+    private suspend fun pollOnce() {
+        if (user != null) runCatching { api.unread() }.onSuccess { unread = it.unread; requests = it.requests; api.saveBadges(it.unread, it.requests) }
+    }
+
     suspend fun pollUnread() {
         while (true) {
-            if (user != null) runCatching { api.unread() }.onSuccess { unread = it }
+            pollOnce()
             delay(15_000)
         }
     }

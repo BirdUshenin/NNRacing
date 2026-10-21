@@ -26,10 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -160,10 +158,13 @@ fun IconBtn(path: String, onClick: () -> Unit, modifier: Modifier = Modifier, ti
 }
 
 @Composable
-fun Avatar(name: String, url: String?, size: Dp = 44.dp, modifier: Modifier = Modifier, guest: Boolean = false) {
+fun Avatar(name: String, url: String?, size: Dp = 44.dp, modifier: Modifier = Modifier, guest: Boolean = false, glow: Boolean = false, glowColor: Color = Rc.Accent) {
     val shape = RoundedCornerShape(size * 0.34f)
     Box(
-        modifier.size(size).clip(shape)
+        modifier.size(size)
+            // мягкое красное свечение вокруг большой аватарки, как на сайте
+            .then(if (glow) Modifier.shadow(22.dp, shape, ambientColor = glowColor.copy(alpha = 0.55f), spotColor = glowColor.copy(alpha = 0.7f)) else Modifier)
+            .clip(shape)
             .then(if (guest) Modifier.background(Rc.Surface3) else Modifier.background(AccentBrush)),
         contentAlignment = Alignment.Center,
     ) {
@@ -223,7 +224,7 @@ fun FieldLabel(text: String, modifier: Modifier = Modifier) = Txt(text.uppercase
 
 /** Переключатель «Вход / Регистрация», «Прямая / Реверс» и т. п. */
 @Composable
-fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, badges: List<Int> = emptyList()) {
     val shape = RoundedCornerShape(16.dp)
     Row(modifier.fillMaxWidth().clip(shape).background(Rc.Surface).border(1.dp, Rc.Line, shape).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEachIndexed { i, label ->
@@ -232,29 +233,14 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
                     .background(if (i == selected) Rc.Surface3 else Color.Transparent)
                     .clickable { onSelect(i) },
                 contentAlignment = Alignment.Center,
-            ) { Txt(label, color = if (i == selected) Rc.Text else Rc.Muted, size = 14.sp, weight = FontWeight.Bold, maxLines = 1) }
-        }
-    }
-}
-
-/** Нижняя шторка с заголовком и крестиком. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun Sheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onClose, sheetState = state,
-        containerColor = Rc.Surface, contentColor = Rc.Text, scrimColor = Color(0x9E000000),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Txt(title, size = 22.sp, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                IconBtn(Ic.X, onClose)
-            }
-            Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())) {
-                content()
-                Spacer(Modifier.height(18.dp))
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Txt(label, color = if (i == selected) Rc.Text else Rc.Muted, size = 14.sp, weight = FontWeight.Bold, maxLines = 1)
+                    val badge = badges.getOrNull(i) ?: 0
+                    if (badge > 0) Box(Modifier.clip(RoundedCornerShape(9.dp)).background(Rc.Accent).padding(horizontal = 6.dp)) {
+                        Txt(if (badge > 99) "99+" else badge.toString(), color = Color.White, size = 11.sp, weight = FontWeight.ExtraBold)
+                    }
+                }
             }
         }
     }
@@ -324,4 +310,23 @@ fun PickerField(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
         modifier.fillMaxWidth().height(52.dp).clip(shape).background(Rc.Surface).border(1.dp, Rc.Line, shape).clickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) { Txt(text, color = if (placeholder) Rc.Hint else Rc.Text) }
+}
+
+
+/** Значки-статусы профиля: ключ → подпись (файлы лежат на сервере: /icons/status/<ключ>.png). */
+val BADGES = listOf("ferrari" to "Ferrari", "redbull" to "Red Bull", "mclaren" to "McLaren", "f1car" to "Болид", "verified" to "Подтверждён", "alpine" to "Alpine")
+
+/** Значок-статус рядом с ником. */
+@Composable
+fun BadgeIcon(key: String, size: Dp, modifier: Modifier = Modifier) {
+    AsyncImage(model = "$BASE_URL/icons/status/$key.png?v=1", contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier.size(size))
+}
+
+/** Имя, а справа от него значок-статус (если есть). */
+@Composable
+fun NameWithBadge(name: String, badge: String?, size: TextUnit = 16.sp, weight: FontWeight = FontWeight.Bold, modifier: Modifier = Modifier, maxLines: Int = 1, color: Color = Rc.Text) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Txt(name, color = color, size = size, weight = weight, maxLines = maxLines, modifier = Modifier.weight(1f, fill = false))
+        if (badge != null) { androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp)); BadgeIcon(badge, (size.value * 1.15f).dp) }
+    }
 }

@@ -160,10 +160,14 @@ fun RunSheet(app: AppState, tracks: List<Track>, onClose: () -> Unit, prefill: R
         )
         busy = true
         app.act(onError = { error = it; busy = false }) {
-            val run = app.api.createRun(body)
+            val created = app.api.createRun(body)
+            val run = created.run
             val mine = run.results.find { it.userId == me.id }
             app.showToast(if (mine != null) "Заезд сохранён · лучший ${fmtLap(mine.bestMs)}" else "Заезд сохранён")
             onClose(); app.refresh(); app.push(Route.Run(run.id))
+            // награды показываем, когда экран заезда уже открылся и шторка уехала: иначе они мелькают во время перехода
+            kotlinx.coroutines.delay(450)
+            app.celebrate(created.newAchievements)
         }
     }
 

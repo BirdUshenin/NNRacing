@@ -3,6 +3,7 @@ package ru.ilyaushenin.nnracing.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,8 +100,8 @@ fun RunScreen(app: AppState, route: Route.Run) {
                 }
                 run.weather?.let { WeatherRow(it) }
                 TimingTable(app, results, mine, bestOverall)
-                if (mine != null) FullResultCard(mine, "Я")
-                others.forEach { FriendCard(it) }
+                if (mine != null) FullResultCard(app, mine, "Я")
+                others.forEach { FriendCard(app, it) }
                 if (run.notes.isNotBlank()) Card { Txt(run.notes, color = Rc.Muted) }
                 if (run.creatorId == me.id) AppButton("Удалить заезд", { confirmDelete = true }, Modifier.fillMaxWidth(), BtnKind.Danger, icon = Ic.Trash)
             }
@@ -166,21 +167,28 @@ private fun TimingRow(pos: String, name: String, best: String, gap: String, head
 }
 
 @Composable
-private fun ResultHeader(r: RunResult, title: String? = null) {
+private fun ResultHeader(app: AppState, r: RunResult, title: String? = null) {
+    // у зарегистрированного пилота (кроме меня) нажатие на аватарку и имя открывает его профиль
+    val open = r.userId?.takeIf { it != app.user?.id }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).then(if (open != null) Modifier.clickable { app.push(Route.UserProfile(open)) } else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         r.user?.let { Avatar(it.name, it.avatarUrl, 44.dp); Box(Modifier.width(10.dp)) }
         Column(Modifier.weight(1f)) {
             Txt(title ?: r.name, weight = FontWeight.ExtraBold, maxLines = 1)
             Txt(listOfNotNull(r.kart?.let { "карт $it" }, "${r.lapCount} ${plural(r.lapCount, "круг", "круга", "кругов")}").joinToString(" · "), color = Rc.Muted, size = 12.sp)
+        }
         }
         if (r.position != null) Txt("P${r.position}", color = Rc.medal(r.position) ?: Rc.Text, size = 26.sp, weight = FontWeight.ExtraBold, mono = true)
     }
 }
 
 @Composable
-private fun FullResultCard(r: RunResult, title: String) {
+private fun FullResultCard(app: AppState, r: RunResult, title: String) {
     Card {
-        ResultHeader(r, title)
+        ResultHeader(app, r, title)
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             r.laps.forEachIndexed { i, lap -> LapRow(i + 1, lap, r.bestMs, i == r.bestIndex) }
         }
@@ -190,9 +198,9 @@ private fun FullResultCard(r: RunResult, title: String) {
 
 /** Друг: три лучших круга, лучший и позиция. */
 @Composable
-private fun FriendCard(r: RunResult) {
+private fun FriendCard(app: AppState, r: RunResult) {
     Card {
-        ResultHeader(r)
+        ResultHeader(app, r)
         val top = r.laps.withIndex().sortedBy { it.value }.take(3)
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             top.forEachIndexed { k, (i, lap) -> LapRow(k + 1, lap, r.bestMs, i == r.bestIndex) }

@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -16,7 +18,9 @@ import ru.ilyaushenin.nnracing.ui.PushBridge
 import ru.ilyaushenin.nnracing.ui.PushNav
 
 class MainActivity : ComponentActivity() {
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { fetchToken() }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) fetchToken() else PushBridge.denied()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
@@ -25,6 +29,8 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         PushBridge.requester = ::enablePush
+        PushBridge.permissionCheck = { NotificationManagerCompat.from(this).areNotificationsEnabled() }
+        PushBridge.settingsOpener = ::openNotificationSettings
         readNotificationIntent(intent)
         setContent { App() }
     }
@@ -45,6 +51,11 @@ class MainActivity : ComponentActivity() {
         } else {
             fetchToken()
         }
+    }
+
+    /** Системные настройки уведомлений приложения: после запрета разрешение можно вернуть только здесь. */
+    private fun openNotificationSettings() {
+        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun fetchToken() {

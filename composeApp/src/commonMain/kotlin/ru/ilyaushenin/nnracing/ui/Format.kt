@@ -78,6 +78,18 @@ fun fmtClock(epochSeconds: Long): String {
     return "${d.hour.toString().padStart(2, '0')}:${d.minute.toString().padStart(2, '0')}"
 }
 
+/** Время последнего сообщения в списке чатов: сегодня — часы и минуты, в пределах недели — день недели (пн–вс), раньше — дата «11.11.26». */
+fun fmtChatListTime(epochSeconds: Long): String {
+    val d = dayKey(epochSeconds)
+    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    val diff = today.toEpochDays() - d.toEpochDays()
+    return when {
+        diff <= 0 -> fmtClock(epochSeconds)
+        diff < 7 -> DAYS_SHORT[d.dayOfWeek] ?: ""
+        else -> "${d.dayOfMonth.toString().padStart(2, '0')}.${d.monthNumber.toString().padStart(2, '0')}.${(d.year % 100).toString().padStart(2, '0')}"
+    }
+}
+
 fun fmtMessageTime(epochSeconds: Long): String = fmtClock(epochSeconds)
 
 fun todayIso(): String = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()

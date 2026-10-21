@@ -142,11 +142,19 @@ class Api(private val settings: Settings) {
         setToken(null)
     }
 
-    suspend fun updateProfile(name: String, isPublic: Boolean): User =
-        send<UserEnvelope>(HttpMethod.Patch, "/me", obj("name" to name, "isPublic" to isPublic)).user
+    suspend fun updateProfile(name: String, isPublic: Boolean, neon: List<String>? = null, badge: String? = null, sendBadge: Boolean = false): User =
+        send<UserEnvelope>(HttpMethod.Patch, "/me", buildJsonObject {
+            put("name", JsonPrimitive(name)); put("isPublic", JsonPrimitive(isPublic))
+            if (sendBadge) put("badge", if (badge == null) kotlinx.serialization.json.JsonNull else JsonPrimitive(badge))
+            if (neon != null) put("neon", JsonArray(neon.map { JsonPrimitive(it) }))
+        }).user
 
     suspend fun setAvatar(jpeg: ByteArray): User =
         call(HttpMethod.Put, "/me/avatar", raw = jpeg, rawType = ContentType.Image.JPEG).body<UserEnvelope>().user
+
+    suspend fun setChatAvatar(chatId: Int, jpeg: ByteArray): Chat =
+        call(HttpMethod.Put, "/chats/$chatId/avatar", raw = jpeg, rawType = ContentType.Image.JPEG).body<ChatEnvelope>().chat
+    suspend fun deleteChatAvatar(chatId: Int): Chat = send<ChatEnvelope>(HttpMethod.Delete, "/chats/$chatId/avatar").chat
 
     suspend fun deleteAvatar(): User = send<UserEnvelope>(HttpMethod.Delete, "/me/avatar").user
 
@@ -169,13 +177,14 @@ class Api(private val settings: Settings) {
     }
     suspend fun runs(trackId: String? = null, userId: Int? = null): List<Run> = get<RunsEnvelope>("/runs", mapOf("track" to trackId, "user" to userId)).runs
     suspend fun run(id: Int): Run = get<RunEnvelope>("/runs/$id").run
-    suspend fun createRun(body: JsonObject): Run = send<RunEnvelope>(HttpMethod.Post, "/runs", body).run
+    suspend fun createRun(body: JsonObject): RunCreated = send<RunCreated>(HttpMethod.Post, "/runs", body)
     suspend fun deleteRun(id: Int) { call(HttpMethod.Delete, "/runs/$id") }
     suspend fun stats(): Stats = get("/stats")
 
     // ---- друзья ----
     suspend fun searchUsers(q: String): List<UserBrief> = get<SearchEnvelope>("/users/search", mapOf("q" to q)).users
     suspend fun profile(id: Int): ProfileResponse = get("/users/$id")
+    suspend fun achievements(): List<Achievement> = get<AchievementsResponse>("/achievements").achievements
     suspend fun friends(): FriendsResponse = get("/friends")
     suspend fun friendRequest(userId: Int): String = send<StatusEnvelope>(HttpMethod.Post, "/friends/request", obj("userId" to userId)).status
     suspend fun friendAccept(id: Int) { call(HttpMethod.Post, "/friends/$id/accept") }
@@ -194,15 +203,30 @@ class Api(private val settings: Settings) {
         call(HttpMethod.Post, "/push/register", obj("token" to token))
     }
 
+    /** Пользователь сам включил или выключил уведомления переключателем: при выключенных приложение не регистрирует устройство. */
+    var pushEnabled: Boolean
+        get() = settings.getBoolean(KEY_PUSH_ENABLED, true)
+        set(value) { settings.putBoolean(KEY_PUSH_ENABLED, value) }
+
     /** При выходе: сервер перестаёт слать уведомления на это устройство. */
     suspend fun unregisterPush() {
         val token = settings.getStringOrNull(KEY_PUSH) ?: return
         call(HttpMethod.Post, "/push/unregister", obj("token" to token))
     }
 
+    /** Последние известные значки вкладок (чаты и заявки): показываются сразу при запуске, пока не пришёл свежий ответ. */
+    fun savedBadges(): Pair<Int, Int> = settings.getInt(KEY_BADGE_UNREAD, 0) to settings.getInt(KEY_BADGE_REQUESTS, 0)
+    fun saveBadges(unread: Int, requests: Int) { settings.putInt(KEY_BADGE_UNREAD, unread); settings.putInt(KEY_BADGE_REQUESTS, requests) }
+
+    /** Номер последнего показанного экрана «что нового»: при выходе новой версии с новым номером он покажется ещё раз. */
+    var onboardingSeen: Int
+        get() = settings.getInt(KEY_ONBOARDING, 0)
+        set(value) { settings.putInt(KEY_ONBOARDING, value) }
+
     // ---- чат ----
     suspend fun chats(): ChatsResponse = get("/chats")
-    suspend fun unread(): Int = get<UnreadEnvelope>("/chats/unread").unread
+    /** Чатов с новыми сообщениями и заявок в друзья: по ним рисуются значки на вкладках. */
+    suspend fun unread(): UnreadEnvelope = get("/chats/unread")
     suspend fun createChat(userIds: List<Int>, title: String?): Chat =
         send<ChatEnvelope>(HttpMethod.Post, "/chats", buildJsonObject {
             put("userIds", JsonArray(userIds.map { JsonPrimitive(it) }))
@@ -212,9 +236,34 @@ class Api(private val settings: Settings) {
         get("/chats/$chatId/messages", mapOf("after" to after, "before" to before))
 
     /** «Длинный опрос»: сервер держит запрос до 20 секунд и отвечает сразу, как только пришло сообщение. */
-    suspend fun waitMessages(chatId: Int, after: Int, read: Int): MessagesResponse =
-        call(HttpMethod.Get, "/chats/$chatId/messages", query = mapOf("after" to after, "wait" to 20, "read" to read), timeoutMs = 25_000).body()
-    suspend fun send(chatId: Int, body: String): Message = send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages", obj("body" to body)).message
+    suspend fun waitMessages(chatId: Int, after: Int, read: Int, ev: Int): MessagesResponse =
+        call(HttpMethod.Get, "/chats/$chatId/messages", query = mapOf("after" to after, "wait" to 20, "read" to read, "ev" to ev), timeoutMs = 25_000).body()
+    suspend fun send(chatId: Int, body: String, replyTo: Int? = null): Message =
+        send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages", obj("body" to body, "replyTo" to replyTo)).message
+    suspend fun sendPhoto(chatId: Int, bytes: ByteArray, width: Int, height: Int, caption: String, replyTo: Int? = null): Message =
+        call(HttpMethod.Post, "/chats/$chatId/photo", query = mapOf("caption" to caption, "w" to width, "h" to height, "replyTo" to replyTo),
+            raw = bytes, rawType = ContentType.Image.JPEG).body<MessageEnvelope>().message
+    suspend fun sendSticker(chatId: Int, name: String, replyTo: Int? = null): Message =
+        send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages", obj("sticker" to name, "replyTo" to replyTo)).message
+    suspend fun sendPoll(chatId: Int, question: String, options: List<String>, multiple: Boolean, replyTo: Int? = null): Message =
+        send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages", buildJsonObject {
+            put("poll", buildJsonObject {
+                put("question", JsonPrimitive(question))
+                put("options", JsonArray(options.map { JsonPrimitive(it) }))
+                put("multiple", JsonPrimitive(multiple))
+            })
+            if (replyTo != null) put("replyTo", JsonPrimitive(replyTo))
+        }).message
+    suspend fun vote(chatId: Int, id: Int, options: List<Int>): Message =
+        send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages/$id/vote", buildJsonObject { put("options", JsonArray(options.map { JsonPrimitive(it) })) }).message
+    suspend fun editMessage(chatId: Int, id: Int, body: String): Message =
+        send<MessageEnvelope>(HttpMethod.Patch, "/chats/$chatId/messages/$id", obj("body" to body)).message
+    suspend fun deleteMessages(chatId: Int, ids: List<Int>) {
+        call(HttpMethod.Post, "/chats/$chatId/delete-messages", buildJsonObject { put("ids", JsonArray(ids.map { JsonPrimitive(it) })) })
+    }
+    suspend fun react(chatId: Int, id: Int, emoji: String): Message =
+        send<MessageEnvelope>(HttpMethod.Post, "/chats/$chatId/messages/$id/reaction", obj("emoji" to emoji)).message
+    suspend fun messageSeen(chatId: Int, id: Int): List<UserBrief> = get<SeenResponse>("/chats/$chatId/messages/$id/seen").users
     suspend fun addChatMembers(chatId: Int, userIds: List<Int>): Chat =
         send<ChatEnvelope>(HttpMethod.Post, "/chats/$chatId/members", buildJsonObject { put("userIds", JsonArray(userIds.map { JsonPrimitive(it) })) }).chat
     suspend fun leaveChat(chatId: Int) { call(HttpMethod.Post, "/chats/$chatId/leave") }
@@ -223,6 +272,10 @@ class Api(private val settings: Settings) {
         private const val KEY_TOKEN = "session"
         private const val KEY_TRACKS = "tracks"
         private const val KEY_PUSH = "push_token"
+        private const val KEY_ONBOARDING = "onboarding_seen"
+        private const val KEY_PUSH_ENABLED = "push_enabled"
+        private const val KEY_BADGE_UNREAD = "badge_unread"
+        private const val KEY_BADGE_REQUESTS = "badge_requests"
     }
 }
 

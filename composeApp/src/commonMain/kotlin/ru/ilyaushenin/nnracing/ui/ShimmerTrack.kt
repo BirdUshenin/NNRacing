@@ -91,5 +91,6 @@ fun LoadingLogo(size: Dp = 56.dp, modifier: Modifier = Modifier) {
 /** Заставка при запуске: трасса целиком, чёткая, без размытия; цвета переливаются. */
 @Composable
 fun SplashTrack(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().background(Rc.Bg).padding(20.dp)) { ShimmerTrack(Modifier.fillMaxSize(), cover = false, line = 46f) }
+    // отступы по бокам больше, чтобы лого на заставке было заметно меньше экрана
+    Box(modifier.fillMaxSize().background(Rc.Bg).padding(horizontal = 56.dp, vertical = 20.dp)) { ShimmerTrack(Modifier.fillMaxSize(), cover = false, line = 46f) }
 }

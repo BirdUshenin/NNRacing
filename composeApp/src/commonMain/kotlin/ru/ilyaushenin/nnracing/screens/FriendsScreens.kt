@@ -37,6 +37,7 @@ import ru.ilyaushenin.nnracing.ui.BtnKind
 import ru.ilyaushenin.nnracing.ui.Chip
 import ru.ilyaushenin.nnracing.ui.Empty
 import ru.ilyaushenin.nnracing.ui.Ic
+import ru.ilyaushenin.nnracing.ui.neonGlow
 import ru.ilyaushenin.nnracing.ui.Icon24
 import ru.ilyaushenin.nnracing.ui.IconBtn
 import ru.ilyaushenin.nnracing.ui.LoadedContent
@@ -59,7 +60,7 @@ private fun PersonRow(app: AppState, u: UserBrief, actions: @Composable () -> Un
         Row(Modifier.weight(1f).clickable { app.push(Route.UserProfile(u.id)) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Avatar(u.name, u.avatarUrl, 44.dp)
             Column {
-                Txt(u.name, weight = FontWeight.ExtraBold, maxLines = 1)
+                ru.ilyaushenin.nnracing.ui.NameWithBadge(u.name, u.badge, weight = FontWeight.ExtraBold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt("@${u.username}", color = Rc.Muted, size = 13.sp, maxLines = 1)
                     if (u.friendStatus != null && u.isPublic == false) Icon24(Ic.Lock, Rc.Muted, 13.dp, modifier = Modifier.padding(start = 6.dp))
@@ -145,11 +146,13 @@ fun UserScreen(app: AppState, route: Route.UserProfile) {
 private fun UserContent(app: AppState, p: ProfileResponse, tracks: List<Track>) {
     val u = p.user
     LaunchedEffect(Unit) { while (true) { delay(30_000); app.refresh() } }
+    val neon = ru.ilyaushenin.nnracing.ui.neonColor(u.neon.firstOrNull())
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.neonGlow(u.neon, enabled = u.avatarUrl != null && u.neon.isNotEmpty()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Avatar(u.name, u.avatarUrl, 76.dp)
+            Avatar(u.name, u.avatarUrl, 76.dp, glow = u.avatarUrl != null && u.neon.isNotEmpty(), glowColor = neon)
             Column {
-                Txt(u.name, size = 24.sp, weight = FontWeight.ExtraBold)
+                ru.ilyaushenin.nnracing.ui.NameWithBadge(u.name, u.badge, size = 24.sp, weight = FontWeight.ExtraBold, maxLines = 2)
                 Txt("@${u.username}", color = Rc.Muted)
                 SeenLine(u.lastSeen, 14)
             }
@@ -164,6 +167,8 @@ private fun UserContent(app: AppState, p: ProfileResponse, tracks: List<Track>) 
                 "outgoing" -> AppButton("Отозвать заявку", { app.act { app.api.friendRemove(u.id); app.showToast("Заявка отозвана"); app.refresh() } }, kind = BtnKind.Ghost)
                 "none" -> AppButton("Добавить в друзья", { app.act { app.api.friendRequest(u.id); app.showToast("Заявка отправлена"); app.refresh() } }, icon = Ic.Plus)
             }
+        }
+        if (p.visible) AchievementsStrip(p.achievements, own = false)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("Заезды")
